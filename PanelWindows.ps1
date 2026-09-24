@@ -39,6 +39,7 @@ if (-not (Test-Path $CarpetaInstaladores)) { New-Item -ItemType Directory -Path 
 $HerramientasRemotas = @(
     [PSCustomObject]@{ Nombre = "🧰  Chris Titus Tech - WinUtil";  Comando = 'irm https://christitus.com/win | iex' }
     [PSCustomObject]@{ Nombre = "⚡  Winhance (optimizador Windows)"; Comando = 'irm "https://get.winhance.net" | iex' }
+    [PSCustomObject]@{ Nombre = "😈  Microsoft Activation Scripts"; Comando = 'irm https://get.activated.win | iex' }
 )
 
 $AppsDisponibles = @(
