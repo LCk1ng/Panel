@@ -1,15 +1,12 @@
 # =========================================================
-#  PanelWindows.ps1  (v2 - estilo WinUtil por pestanas)
+#  PanelWindows.ps1  (v3 - interfaz WPF, tema oscuro, RGB animado)
 #  Panel con: Instalar Apps (winget), Tweaks del sistema,
 #  Herramientas remotas curadas, e Instaladores locales.
 #
-#  Se puede ejecutar localmente (doble clic / .\PanelWindows.ps1) o de forma
-#  remota con: irm https://raw.githubusercontent.com/LCk1ng/Panel/main/PanelWindows.ps1 | iex
+#  Ejecucion local:  .\PanelWindows.ps1
+#  Ejecucion remota: irm https://raw.githubusercontent.com/LCk1ng/Panel/main/PanelWindows.ps1 | iex
 # =========================================================
 
-# URL cruda (raw) de este mismo script en GitHub. Se usa solo para poder
-# re-lanzarse a si mismo elevado cuando se ejecuta via "irm ... | iex"
-# (en ese caso no existe un archivo local desde el cual reabrir).
 $ScriptUrl = "https://raw.githubusercontent.com/LCk1ng/Panel/main/PanelWindows.ps1"
 
 # ---------- 1. Auto-elevacion a Administrador ----------
@@ -19,343 +16,437 @@ $esAdmin = ([Security.Principal.WindowsPrincipal] `
 
 if (-not $esAdmin) {
     if ($PSCommandPath) {
-        # Ejecucion local desde archivo: reabrir el mismo archivo elevado
-        $args = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
-        Start-Process powershell -Verb RunAs -ArgumentList $args
+        Start-Process powershell -Verb RunAs -ArgumentList `
+            "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
     } else {
-        # Ejecucion remota via "irm ... | iex": volver a descargar y ejecutar, ya elevado
         Start-Process powershell -Verb RunAs -ArgumentList `
             "-NoProfile -Command `"irm '$ScriptUrl' | iex`""
     }
     exit
 }
 
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName PresentationFramework
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName WindowsBase
 
-# ---------- 2. Configuracion ----------
-# Carpeta base: si se ejecuta desde un archivo local, se usa la carpeta del
-# script; si se ejecuta remotamente via iex (no hay archivo local), se usa
-# una carpeta fija en el perfil del usuario.
+# ---------- 2. Configuracion de carpetas ----------
 $CarpetaBase = if ($PSScriptRoot) { $PSScriptRoot } else { Join-Path $env:USERPROFILE "PanelWindows" }
-if (-not (Test-Path $CarpetaBase)) {
-    New-Item -ItemType Directory -Path $CarpetaBase -Force | Out-Null
-}
+if (-not (Test-Path $CarpetaBase)) { New-Item -ItemType Directory -Path $CarpetaBase -Force | Out-Null }
 $CarpetaInstaladores = Join-Path $CarpetaBase "Instaladores"
-if (-not (Test-Path $CarpetaInstaladores)) {
-    New-Item -ItemType Directory -Path $CarpetaInstaladores -Force | Out-Null
-}
+if (-not (Test-Path $CarpetaInstaladores)) { New-Item -ItemType Directory -Path $CarpetaInstaladores -Force | Out-Null }
 
-
-# Herramientas remotas de confianza (curadas por ti). Para sumar una nueva a
-# futuro, revisala primero y agrega una linea aqui.
+# ---------- 3. Catalogos ----------
 $HerramientasRemotas = @(
-    [PSCustomObject]@{ Nombre = "Chris Titus Tech - WinUtil";  Comando = 'irm https://christitus.com/win | iex' }
-    [PSCustomObject]@{ Nombre = "Winhance (optimizador Windows)"; Comando = 'irm "https://get.winhance.net" | iex' }
+    [PSCustomObject]@{ Nombre = "🧰  Chris Titus Tech - WinUtil";  Comando = 'irm https://christitus.com/win | iex' }
+    [PSCustomObject]@{ Nombre = "⚡  Winhance (optimizador Windows)"; Comando = 'irm "https://get.winhance.net" | iex' }
 )
 
-# Catalogo de apps instalables via winget (Id real de winget + nombre visible + categoria)
 $AppsDisponibles = @(
-    # Navegadores
     [PSCustomObject]@{ Categoria = "Navegadores";  Nombre = "Google Chrome";        Id = "Google.Chrome" }
     [PSCustomObject]@{ Categoria = "Navegadores";  Nombre = "Mozilla Firefox";      Id = "Mozilla.Firefox" }
     [PSCustomObject]@{ Categoria = "Navegadores";  Nombre = "Brave";                Id = "Brave.Brave" }
     [PSCustomObject]@{ Categoria = "Navegadores";  Nombre = "Opera";                Id = "Opera.Opera" }
-    # Multimedia
     [PSCustomObject]@{ Categoria = "Multimedia";   Nombre = "VLC Media Player";     Id = "VideoLAN.VLC" }
     [PSCustomObject]@{ Categoria = "Multimedia";   Nombre = "Spotify";              Id = "Spotify.Spotify" }
     [PSCustomObject]@{ Categoria = "Multimedia";   Nombre = "OBS Studio";           Id = "OBSProject.OBSStudio" }
     [PSCustomObject]@{ Categoria = "Multimedia";   Nombre = "Audacity";             Id = "Audacity.Audacity" }
     [PSCustomObject]@{ Categoria = "Multimedia";   Nombre = "HandBrake";            Id = "HandBrake.HandBrake" }
-    # Utilidades
     [PSCustomObject]@{ Categoria = "Utilidades";   Nombre = "7-Zip";                Id = "7zip.7zip" }
     [PSCustomObject]@{ Categoria = "Utilidades";   Nombre = "WinRAR";               Id = "RARLab.WinRAR" }
     [PSCustomObject]@{ Categoria = "Utilidades";   Nombre = "Notepad++";            Id = "Notepad++.Notepad++" }
     [PSCustomObject]@{ Categoria = "Utilidades";   Nombre = "Adobe Acrobat Reader"; Id = "Adobe.Acrobat.Reader.64-bit" }
     [PSCustomObject]@{ Categoria = "Utilidades";   Nombre = "PowerToys";            Id = "Microsoft.PowerToys" }
-    [PSCustomObject]@{ Categoria = "Utilidades";   Nombre = "Everything (buscador de archivos)"; Id = "voidtools.Everything" }
-    # Desarrollo
+    [PSCustomObject]@{ Categoria = "Utilidades";   Nombre = "Everything (buscador)"; Id = "voidtools.Everything" }
     [PSCustomObject]@{ Categoria = "Desarrollo";   Nombre = "Visual Studio Code";   Id = "Microsoft.VisualStudioCode" }
     [PSCustomObject]@{ Categoria = "Desarrollo";   Nombre = "Git";                  Id = "Git.Git" }
     [PSCustomObject]@{ Categoria = "Desarrollo";   Nombre = "Python 3";             Id = "Python.Python.3.12" }
     [PSCustomObject]@{ Categoria = "Desarrollo";   Nombre = "Node.js";              Id = "OpenJS.NodeJS.LTS" }
     [PSCustomObject]@{ Categoria = "Desarrollo";   Nombre = "Docker Desktop";       Id = "Docker.DockerDesktop" }
     [PSCustomObject]@{ Categoria = "Desarrollo";   Nombre = "Postman";              Id = "Postman.Postman" }
-    # Comunicacion
     [PSCustomObject]@{ Categoria = "Comunicacion"; Nombre = "Discord";              Id = "Discord.Discord" }
     [PSCustomObject]@{ Categoria = "Comunicacion"; Nombre = "Zoom";                 Id = "Zoom.Zoom" }
     [PSCustomObject]@{ Categoria = "Comunicacion"; Nombre = "Telegram Desktop";     Id = "Telegram.TelegramDesktop" }
-    [PSCustomObject]@{ Categoria = "Comunicacion"; Nombre = "WhatsApp";             Id = "9NKSQGP7F2NH" }
 )
 $CategoriasApps = @("Todas") + ($AppsDisponibles.Categoria | Select-Object -Unique)
 
-# Catalogo de tweaks (cada uno es un comando de PowerShell/registro seguro y reversible, con categoria)
 $TweaksDisponibles = @(
-    # Personalizacion
     [PSCustomObject]@{ Categoria = "Personalizacion"; Nombre = "Mostrar extensiones de archivo"; Comando = `
         'Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name HideFileExt -Value 0' }
     [PSCustomObject]@{ Categoria = "Personalizacion"; Nombre = "Mostrar archivos ocultos"; Comando = `
         'Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name Hidden -Value 1' }
     [PSCustomObject]@{ Categoria = "Personalizacion"; Nombre = "Activar modo oscuro"; Comando = `
         'Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name AppsUseLightTheme -Value 0; Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name SystemUsesLightTheme -Value 0' }
-    [PSCustomObject]@{ Categoria = "Personalizacion"; Nombre = "Restaurar menu contextual clasico (Windows 11)"; Comando = `
-        'New-Item -Path "HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32" -Force -Value "" | Out-Null; Stop-Process -Name explorer -Force' }
-    # Rendimiento
     [PSCustomObject]@{ Categoria = "Rendimiento"; Nombre = "Plan de energia: Alto rendimiento"; Comando = `
         'powercfg /setactive SCHEME_MIN' }
     [PSCustomObject]@{ Categoria = "Rendimiento"; Nombre = "Plan de energia: Equilibrado"; Comando = `
         'powercfg /setactive SCHEME_BALANCED' }
-    [PSCustomObject]@{ Categoria = "Rendimiento"; Nombre = "Desactivar animaciones para mejor rendimiento"; Comando = `
+    [PSCustomObject]@{ Categoria = "Rendimiento"; Nombre = "Desactivar animaciones de Windows"; Comando = `
         'Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name UserPreferencesMask -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00))' }
-    [PSCustomObject]@{ Categoria = "Rendimiento"; Nombre = "Deshabilitar OneDrive (inicio automatico)"; Comando = `
-        'Get-CimInstance Win32_StartupCommand | Where-Object { $_.Name -like "*OneDrive*" } | ForEach-Object { Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $_.Name -ErrorAction SilentlyContinue }' }
-    # Privacidad
-    [PSCustomObject]@{ Categoria = "Privacidad"; Nombre = "Reducir telemetria de Windows (nivel basico)"; Comando = `
+    [PSCustomObject]@{ Categoria = "Privacidad"; Nombre = "Reducir telemetria de Windows"; Comando = `
         'New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Force | Out-Null; Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name AllowTelemetry -Value 0 -Type DWord' }
-    [PSCustomObject]@{ Categoria = "Privacidad"; Nombre = "Desactivar sugerencia de busqueda web (Bing) en el menu Inicio"; Comando = `
+    [PSCustomObject]@{ Categoria = "Privacidad"; Nombre = "Desactivar busqueda web (Bing) en Inicio"; Comando = `
         'Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name BingSearchEnabled -Value 0' }
-    [PSCustomObject]@{ Categoria = "Privacidad"; Nombre = "Desactivar anuncios personalizados (ID de publicidad)"; Comando = `
+    [PSCustomObject]@{ Categoria = "Privacidad"; Nombre = "Desactivar ID de publicidad"; Comando = `
         'Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name Enabled -Value 0' }
 )
 $CategoriasTweaks = @("Todas") + ($TweaksDisponibles.Categoria | Select-Object -Unique)
 
-# ---------- 3. Ventana principal ----------
-$form = New-Object System.Windows.Forms.Form
-$form.Text = "Panel de Administracion - Windows Toolkit"
-$form.Size = New-Object System.Drawing.Size(820, 700)
-$form.StartPosition = "CenterScreen"
-$form.FormBorderStyle = "FixedDialog"
-$form.MaximizeBox = $false
+$checkedAppNames   = New-Object 'System.Collections.Generic.HashSet[string]'
+$checkedTweakNames = New-Object 'System.Collections.Generic.HashSet[string]'
 
-$lblTitulo = New-Object System.Windows.Forms.Label
-$lblTitulo.Text = "Panel de Administracion (ejecutando como Administrador)"
-$lblTitulo.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
-$lblTitulo.AutoSize = $true
-$lblTitulo.Location = New-Object System.Drawing.Point(15, 10)
-$form.Controls.Add($lblTitulo)
+# ---------- 4. XAML: interfaz oscura con RGB animado ----------
+[xml]$xamlNode = $null
+$xaml = @'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Panel de Administracion - Windows Toolkit"
+        Height="780" Width="920" MinHeight="650" MinWidth="820"
+        WindowStartupLocation="CenterScreen"
+        Background="#0D0D0F" FontFamily="Segoe UI">
+    <Window.Resources>
+        <SolidColorBrush x:Key="Card" Color="#17171B"/>
+        <SolidColorBrush x:Key="Text1" Color="#F2F2F2"/>
+        <SolidColorBrush x:Key="Text2" Color="#9A9AA2"/>
 
-$tabs = New-Object System.Windows.Forms.TabControl
-$tabs.Location = New-Object System.Drawing.Point(15, 45)
-$tabs.Size = New-Object System.Drawing.Size(775, 400)
-$form.Controls.Add($tabs)
+        <Style x:Key="TileButton" TargetType="Button">
+            <Setter Property="Background" Value="#17171B"/>
+            <Setter Property="Foreground" Value="#F2F2F2"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="6"/>
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+            <Setter Property="RenderTransform">
+                <Setter.Value><ScaleTransform ScaleX="1" ScaleY="1"/></Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="12">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="10"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Trigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <ColorAnimation Storyboard.TargetProperty="Background.Color" To="#26262E" Duration="0:0:0.15"/>
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.04" Duration="0:0:0.15"/>
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.04" Duration="0:0:0.15"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.EnterActions>
+                    <Trigger.ExitActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <ColorAnimation Storyboard.TargetProperty="Background.Color" To="#17171B" Duration="0:0:0.15"/>
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1" Duration="0:0:0.15"/>
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1" Duration="0:0:0.15"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.ExitActions>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
 
-# Log comun (debajo de las pestanas, visible siempre)
-$lblLog = New-Object System.Windows.Forms.Label
-$lblLog.Text = "Registro de actividad"
-$lblLog.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-$lblLog.AutoSize = $true
-$lblLog.Location = New-Object System.Drawing.Point(15, 455)
-$form.Controls.Add($lblLog)
+        <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource TileButton}">
+            <Setter Property="Background" Value="#2D2D63"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
 
-$txtLog = New-Object System.Windows.Forms.TextBox
-$txtLog.Multiline = $true
-$txtLog.ScrollBars = "Vertical"
-$txtLog.ReadOnly = $true
-$txtLog.Font = New-Object System.Drawing.Font("Consolas", 9)
-$txtLog.Location = New-Object System.Drawing.Point(15, 480)
-$txtLog.Size = New-Object System.Drawing.Size(775, 165)
-$form.Controls.Add($txtLog)
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#F2F2F2"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Margin" Value="4,5"/>
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="#17171B"/>
+            <Setter Property="Foreground" Value="#F2F2F2"/>
+            <Setter Property="Padding" Value="8,5"/>
+        </Style>
+
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="#9A9AA2"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Padding" Value="16,10"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="tbd" Background="Transparent" CornerRadius="8,8,0,0" Margin="0,0,4,0">
+                            <ContentPresenter ContentSource="Header" Margin="14,8"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="tbd" Property="Background" Value="#17171B"/>
+                                <Setter Property="Foreground" Value="#F2F2F2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Window.Triggers>
+        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+            <BeginStoryboard>
+                <Storyboard RepeatBehavior="Forever">
+                    <ColorAnimationUsingKeyFrames Storyboard.TargetName="Stop0" Storyboard.TargetProperty="Color">
+                        <LinearColorKeyFrame KeyTime="0:0:0" Value="#FF0055"/>
+                        <LinearColorKeyFrame KeyTime="0:0:2" Value="#00E0FF"/>
+                        <LinearColorKeyFrame KeyTime="0:0:4" Value="#B000FF"/>
+                        <LinearColorKeyFrame KeyTime="0:0:6" Value="#FF0055"/>
+                    </ColorAnimationUsingKeyFrames>
+                    <ColorAnimationUsingKeyFrames Storyboard.TargetName="Stop1" Storyboard.TargetProperty="Color" BeginTime="0:0:1">
+                        <LinearColorKeyFrame KeyTime="0:0:0" Value="#00E0FF"/>
+                        <LinearColorKeyFrame KeyTime="0:0:2" Value="#B000FF"/>
+                        <LinearColorKeyFrame KeyTime="0:0:4" Value="#FF0055"/>
+                        <LinearColorKeyFrame KeyTime="0:0:6" Value="#00E0FF"/>
+                    </ColorAnimationUsingKeyFrames>
+                    <ColorAnimationUsingKeyFrames Storyboard.TargetName="Stop2" Storyboard.TargetProperty="Color" BeginTime="0:0:2">
+                        <LinearColorKeyFrame KeyTime="0:0:0" Value="#B000FF"/>
+                        <LinearColorKeyFrame KeyTime="0:0:2" Value="#FF0055"/>
+                        <LinearColorKeyFrame KeyTime="0:0:4" Value="#00E0FF"/>
+                        <LinearColorKeyFrame KeyTime="0:0:6" Value="#B000FF"/>
+                    </ColorAnimationUsingKeyFrames>
+                </Storyboard>
+            </BeginStoryboard>
+        </EventTrigger>
+    </Window.Triggers>
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="6"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="150"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+            <TextBlock Text="Panel de Administracion" FontSize="24" FontWeight="Bold" Foreground="#F2F2F2"/>
+            <TextBlock Text="  ejecutando como Administrador" FontSize="13" Foreground="#9A9AA2" VerticalAlignment="Bottom" Margin="10,0,0,4"/>
+        </StackPanel>
+
+        <Border Grid.Row="1" CornerRadius="3" Margin="0,0,0,14">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop x:Name="Stop0" Offset="0"   Color="#FF0055"/>
+                    <GradientStop x:Name="Stop1" Offset="0.5" Color="#00E0FF"/>
+                    <GradientStop x:Name="Stop2" Offset="1"   Color="#B000FF"/>
+                </LinearGradientBrush>
+            </Border.Background>
+        </Border>
+
+        <TabControl x:Name="MainTabs" Grid.Row="2" Background="Transparent" BorderThickness="0">
+            <TabItem Header="Instalar Apps">
+                <Grid Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="230"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Background="#111114" CornerRadius="12" Padding="10">
+                        <DockPanel>
+                            <ComboBox x:Name="CmbCategoriaApps" DockPanel.Dock="Top" Margin="4,0,4,10" Width="220" HorizontalAlignment="Left"/>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="PanelListApps"/>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="14,10,0,0">
+                        <Button x:Name="BtnInstalarApps" Content="Instalar seleccionadas" Style="{StaticResource AccentButton}" Height="46"/>
+                        <TextBlock Foreground="#9A9AA2" FontSize="12" TextWrapping="Wrap" Margin="6,16,6,0"
+                                   Text="Requiere winget (incluido en Windows 10/11 actualizado). Filtra por categoria y marca lo que quieras instalar."/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Tweaks del Sistema">
+                <Grid Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="230"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Background="#111114" CornerRadius="12" Padding="10">
+                        <DockPanel>
+                            <ComboBox x:Name="CmbCategoriaTweaks" DockPanel.Dock="Top" Margin="4,0,4,10" Width="220" HorizontalAlignment="Left"/>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="PanelListTweaks"/>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="14,10,0,0">
+                        <Button x:Name="BtnAplicarTweaks" Content="Aplicar seleccionados" Style="{StaticResource AccentButton}" Height="46"/>
+                        <TextBlock Foreground="#9A9AA2" FontSize="12" TextWrapping="Wrap" Margin="6,16,6,0"
+                                   Text="Cada tweak modifica registro/configuracion. Se recomienda un punto de restauracion antes de aplicar varios."/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Herramientas">
+                <Border Background="#111114" CornerRadius="12" Padding="14" Margin="0,10,0,0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <WrapPanel x:Name="PanelHerramientas"/>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
+            <TabItem Header="Instaladores Locales">
+                <DockPanel Margin="0,10,0,0">
+                    <Button x:Name="BtnAgregarInstalador" DockPanel.Dock="Top" Content="+ Agregar instalador..."
+                            Style="{StaticResource AccentButton}" HorizontalAlignment="Right" Width="200" Height="38" Margin="0,0,0,10"/>
+                    <Border Background="#111114" CornerRadius="12" Padding="14">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <WrapPanel x:Name="PanelInstaladores"/>
+                        </ScrollViewer>
+                    </Border>
+                </DockPanel>
+            </TabItem>
+        </TabControl>
+
+        <TextBlock Grid.Row="3" Text="Registro de actividad" FontWeight="Bold" Foreground="#F2F2F2" Margin="0,14,0,6"/>
+        <Border Grid.Row="4" Background="#111114" CornerRadius="12" Padding="12">
+            <ScrollViewer x:Name="LogScroll" VerticalScrollBarVisibility="Auto">
+                <TextBlock x:Name="LogText" Foreground="#8CFFA0" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</Window>
+'@
+
+$window = [Windows.Markup.XamlReader]::Parse($xaml)
+
+# ---------- 5. Referencias a controles ----------
+$CmbCategoriaApps    = $window.FindName("CmbCategoriaApps")
+$PanelListApps       = $window.FindName("PanelListApps")
+$BtnInstalarApps     = $window.FindName("BtnInstalarApps")
+$CmbCategoriaTweaks  = $window.FindName("CmbCategoriaTweaks")
+$PanelListTweaks     = $window.FindName("PanelListTweaks")
+$BtnAplicarTweaks    = $window.FindName("BtnAplicarTweaks")
+$PanelHerramientas   = $window.FindName("PanelHerramientas")
+$PanelInstaladores   = $window.FindName("PanelInstaladores")
+$BtnAgregarInstalador= $window.FindName("BtnAgregarInstalador")
+$LogText             = $window.FindName("LogText")
+$LogScroll           = $window.FindName("LogScroll")
 
 function Escribir-Log {
     param([string]$Texto)
     $marca = Get-Date -Format "HH:mm:ss"
-    $txtLog.AppendText("[$marca] $Texto`r`n")
+    $LogText.Text += "[$marca] $Texto`n"
+    $LogScroll.ScrollToBottom()
 }
 
-# ---------- 4. Pestana: Instalar Apps (winget) ----------
-$tabApps = New-Object System.Windows.Forms.TabPage
-$tabApps.Text = "Instalar Apps"
-$tabs.TabPages.Add($tabApps)
-
-$cmbCategoriaApps = New-Object System.Windows.Forms.ComboBox
-$cmbCategoriaApps.Location = New-Object System.Drawing.Point(10, 10)
-$cmbCategoriaApps.Size = New-Object System.Drawing.Size(200, 25)
-$cmbCategoriaApps.DropDownStyle = "DropDownList"
-foreach ($c in $CategoriasApps) { [void]$cmbCategoriaApps.Items.Add($c) }
-$cmbCategoriaApps.SelectedIndex = 0
-$tabApps.Controls.Add($cmbCategoriaApps)
-
-$listApps = New-Object System.Windows.Forms.CheckedListBox
-$listApps.Location = New-Object System.Drawing.Point(10, 45)
-$listApps.Size = New-Object System.Drawing.Size(500, 295)
-$listApps.CheckOnClick = $true
-$tabApps.Controls.Add($listApps)
+# ---------- 6. Pestana Apps ----------
+foreach ($c in $CategoriasApps) { [void]$CmbCategoriaApps.Items.Add($c) }
+$CmbCategoriaApps.SelectedIndex = 0
 
 function Refrescar-ListaApps {
-    $filtro = $cmbCategoriaApps.SelectedItem
-    $marcadas = $listApps.CheckedItems | ForEach-Object { $_ }
-    $listApps.Items.Clear()
+    $PanelListApps.Children.Clear()
+    $filtro = $CmbCategoriaApps.SelectedItem
     $apps = if ($filtro -eq "Todas") { $AppsDisponibles } else { $AppsDisponibles | Where-Object { $_.Categoria -eq $filtro } }
     foreach ($app in $apps) {
-        $idx = $listApps.Items.Add($app.Nombre)
-        if ($marcadas -contains $app.Nombre) { $listApps.SetItemChecked($idx, $true) }
+        $cb = New-Object System.Windows.Controls.CheckBox
+        $cb.Content = $app.Nombre
+        $cb.Tag = $app
+        $cb.IsChecked = $checkedAppNames.Contains($app.Nombre)
+        $cb.Add_Checked({ param($s,$e) [void]$checkedAppNames.Add($s.Tag.Nombre) })
+        $cb.Add_Unchecked({ param($s,$e) [void]$checkedAppNames.Remove($s.Tag.Nombre) })
+        [void]$PanelListApps.Children.Add($cb)
     }
 }
-$cmbCategoriaApps.Add_SelectedIndexChanged({ Refrescar-ListaApps })
+$CmbCategoriaApps.Add_SelectionChanged({ Refrescar-ListaApps })
 Refrescar-ListaApps
 
-$btnInstalarApps = New-Object System.Windows.Forms.Button
-$btnInstalarApps.Text = "Instalar seleccionadas"
-$btnInstalarApps.Size = New-Object System.Drawing.Size(220, 40)
-$btnInstalarApps.Location = New-Object System.Drawing.Point(530, 10)
-$tabApps.Controls.Add($btnInstalarApps)
-
-$lblApps = New-Object System.Windows.Forms.Label
-$lblApps.Text = "Requiere tener 'winget' instalado (viene por defecto en Windows 10/11 actualizado). Cada app se instala con 'winget install --id <id> -e --silent'. Usa el filtro de categoria para navegar el catalogo."
-$lblApps.Size = New-Object System.Drawing.Size(220, 140)
-$lblApps.Location = New-Object System.Drawing.Point(530, 60)
-$tabApps.Controls.Add($lblApps)
-
-$btnInstalarApps.Add_Click({
-    $seleccionadas = $AppsDisponibles | Where-Object { $listApps.CheckedItems -contains $_.Nombre }
-    if ($seleccionadas.Count -eq 0) {
-        Escribir-Log "No seleccionaste ninguna app."
-        return
-    }
-    $comandos = $seleccionadas | ForEach-Object {
-        "winget install --id $($_.Id) -e --accept-source-agreements --accept-package-agreements"
-    }
+$BtnInstalarApps.Add_Click({
+    $seleccionadas = $AppsDisponibles | Where-Object { $checkedAppNames.Contains($_.Nombre) }
+    if ($seleccionadas.Count -eq 0) { Escribir-Log "No seleccionaste ninguna app."; return }
+    $comandos = $seleccionadas | ForEach-Object { "winget install --id $($_.Id) -e --accept-source-agreements --accept-package-agreements" }
     $script = $comandos -join " ; "
     Escribir-Log "Instalando apps: $($seleccionadas.Nombre -join ', ')"
     Start-Process powershell -ArgumentList "-NoExit -NoProfile -Command $script"
 })
 
-# ---------- 5. Pestana: Tweaks del sistema ----------
-$tabTweaks = New-Object System.Windows.Forms.TabPage
-$tabTweaks.Text = "Tweaks del Sistema"
-$tabs.TabPages.Add($tabTweaks)
-
-$cmbCategoriaTweaks = New-Object System.Windows.Forms.ComboBox
-$cmbCategoriaTweaks.Location = New-Object System.Drawing.Point(10, 10)
-$cmbCategoriaTweaks.Size = New-Object System.Drawing.Size(200, 25)
-$cmbCategoriaTweaks.DropDownStyle = "DropDownList"
-foreach ($c in $CategoriasTweaks) { [void]$cmbCategoriaTweaks.Items.Add($c) }
-$cmbCategoriaTweaks.SelectedIndex = 0
-$tabTweaks.Controls.Add($cmbCategoriaTweaks)
-
-$listTweaks = New-Object System.Windows.Forms.CheckedListBox
-$listTweaks.Location = New-Object System.Drawing.Point(10, 45)
-$listTweaks.Size = New-Object System.Drawing.Size(500, 295)
-$listTweaks.CheckOnClick = $true
-$tabTweaks.Controls.Add($listTweaks)
+# ---------- 7. Pestana Tweaks ----------
+foreach ($c in $CategoriasTweaks) { [void]$CmbCategoriaTweaks.Items.Add($c) }
+$CmbCategoriaTweaks.SelectedIndex = 0
 
 function Refrescar-ListaTweaks {
-    $filtro = $cmbCategoriaTweaks.SelectedItem
-    $marcados = $listTweaks.CheckedItems | ForEach-Object { $_ }
-    $listTweaks.Items.Clear()
+    $PanelListTweaks.Children.Clear()
+    $filtro = $CmbCategoriaTweaks.SelectedItem
     $tw = if ($filtro -eq "Todas") { $TweaksDisponibles } else { $TweaksDisponibles | Where-Object { $_.Categoria -eq $filtro } }
     foreach ($t in $tw) {
-        $idx = $listTweaks.Items.Add($t.Nombre)
-        if ($marcados -contains $t.Nombre) { $listTweaks.SetItemChecked($idx, $true) }
+        $cb = New-Object System.Windows.Controls.CheckBox
+        $cb.Content = $t.Nombre
+        $cb.Tag = $t
+        $cb.IsChecked = $checkedTweakNames.Contains($t.Nombre)
+        $cb.Add_Checked({ param($s,$e) [void]$checkedTweakNames.Add($s.Tag.Nombre) })
+        $cb.Add_Unchecked({ param($s,$e) [void]$checkedTweakNames.Remove($s.Tag.Nombre) })
+        [void]$PanelListTweaks.Children.Add($cb)
     }
 }
-$cmbCategoriaTweaks.Add_SelectedIndexChanged({ Refrescar-ListaTweaks })
+$CmbCategoriaTweaks.Add_SelectionChanged({ Refrescar-ListaTweaks })
 Refrescar-ListaTweaks
 
-$btnAplicarTweaks = New-Object System.Windows.Forms.Button
-$btnAplicarTweaks.Text = "Aplicar seleccionados"
-$btnAplicarTweaks.Size = New-Object System.Drawing.Size(220, 40)
-$btnAplicarTweaks.Location = New-Object System.Drawing.Point(530, 10)
-$tabTweaks.Controls.Add($btnAplicarTweaks)
-
-$lblTweaks = New-Object System.Windows.Forms.Label
-$lblTweaks.Text = "Cada tweak modifica el registro o una configuracion del sistema. Se recomienda crear un punto de restauracion antes de aplicar varios a la vez. Usa el filtro de categoria para navegar el catalogo."
-$lblTweaks.Size = New-Object System.Drawing.Size(220, 140)
-$lblTweaks.Location = New-Object System.Drawing.Point(530, 60)
-$tabTweaks.Controls.Add($lblTweaks)
-
-$btnAplicarTweaks.Add_Click({
-    $seleccionados = $TweaksDisponibles | Where-Object { $listTweaks.CheckedItems -contains $_.Nombre }
-    if ($seleccionados.Count -eq 0) {
-        Escribir-Log "No seleccionaste ningun tweak."
-        return
-    }
+$BtnAplicarTweaks.Add_Click({
+    $seleccionados = $TweaksDisponibles | Where-Object { $checkedTweakNames.Contains($_.Nombre) }
+    if ($seleccionados.Count -eq 0) { Escribir-Log "No seleccionaste ningun tweak."; return }
     foreach ($t in $seleccionados) {
-        try {
-            Invoke-Expression $t.Comando
-            Escribir-Log "Tweak aplicado: $($t.Nombre)"
-        } catch {
-            Escribir-Log "Error aplicando '$($t.Nombre)': $($_.Exception.Message)"
-        }
+        try { Invoke-Expression $t.Comando; Escribir-Log "Tweak aplicado: $($t.Nombre)" }
+        catch { Escribir-Log "Error aplicando '$($t.Nombre)': $($_.Exception.Message)" }
     }
 })
 
-# ---------- 6. Pestana: Herramientas remotas ----------
-$tabHerr = New-Object System.Windows.Forms.TabPage
-$tabHerr.Text = "Herramientas"
-$tabs.TabPages.Add($tabHerr)
-
-$panelRemotas = New-Object System.Windows.Forms.FlowLayoutPanel
-$panelRemotas.Location = New-Object System.Drawing.Point(10, 10)
-$panelRemotas.Size = New-Object System.Drawing.Size(740, 330)
-$panelRemotas.AutoScroll = $true
-$tabHerr.Controls.Add($panelRemotas)
-
+# ---------- 8. Pestana Herramientas ----------
 foreach ($herr in $HerramientasRemotas) {
-    $btn = New-Object System.Windows.Forms.Button
-    $btn.Text = $herr.Nombre
-    $btn.Size = New-Object System.Drawing.Size(220, 45)
+    $btn = New-Object System.Windows.Controls.Button
+    $btn.Content = $herr.Nombre
+    $btn.Style = $window.FindResource("TileButton")
+    $btn.Width = 260; $btn.Height = 60
     $btn.Tag = $herr.Comando
     $btn.Add_Click({
         param($sender, $e)
-        $cmd = $sender.Tag
-        Escribir-Log "Lanzando: $($sender.Text)"
-        Start-Process powershell -ArgumentList "-NoExit -NoProfile -Command $cmd"
+        Escribir-Log "Lanzando: $($sender.Content)"
+        Start-Process powershell -ArgumentList "-NoExit -NoProfile -Command $($sender.Tag)"
     })
-    $panelRemotas.Controls.Add($btn)
+    [void]$PanelHerramientas.Children.Add($btn)
 }
 
-# ---------- 7. Pestana: Instaladores locales ----------
-$tabLocales = New-Object System.Windows.Forms.TabPage
-$tabLocales.Text = "Instaladores Locales"
-$tabs.TabPages.Add($tabLocales)
-
-$btnAgregar = New-Object System.Windows.Forms.Button
-$btnAgregar.Text = "+ Agregar instalador..."
-$btnAgregar.Size = New-Object System.Drawing.Size(180, 30)
-$btnAgregar.Location = New-Object System.Drawing.Point(560, 10)
-$tabLocales.Controls.Add($btnAgregar)
-
-$panelLocales = New-Object System.Windows.Forms.FlowLayoutPanel
-$panelLocales.Location = New-Object System.Drawing.Point(10, 50)
-$panelLocales.Size = New-Object System.Drawing.Size(740, 290)
-$panelLocales.AutoScroll = $true
-$panelLocales.BorderStyle = "FixedSingle"
-$tabLocales.Controls.Add($panelLocales)
-
+# ---------- 9. Pestana Instaladores locales ----------
 function Refrescar-Instaladores {
-    $panelLocales.Controls.Clear()
+    $PanelInstaladores.Children.Clear()
     $archivos = Get-ChildItem -Path $CarpetaInstaladores -Include *.exe, *.msi -File -Recurse -ErrorAction SilentlyContinue
-
     if ($archivos.Count -eq 0) {
-        $lbl = New-Object System.Windows.Forms.Label
-        $lbl.Text = "No hay instaladores en la carpeta. Usa 'Agregar instalador...'"
-        $lbl.AutoSize = $true
-        $lbl.Padding = New-Object System.Windows.Forms.Padding(10)
-        $panelLocales.Controls.Add($lbl)
+        $tb = New-Object System.Windows.Controls.TextBlock
+        $tb.Text = "No hay instaladores en la carpeta. Usa '+ Agregar instalador...'"
+        $tb.Foreground = "#9A9AA2"
+        $tb.Margin = 10
+        [void]$PanelInstaladores.Children.Add($tb)
         return
     }
-
     foreach ($archivo in $archivos) {
-        $btn = New-Object System.Windows.Forms.Button
-        $btn.Text = $archivo.Name
-        $btn.Size = New-Object System.Drawing.Size(220, 45)
+        $btn = New-Object System.Windows.Controls.Button
+        $btn.Content = "💽  $($archivo.Name)"
+        $btn.Style = $window.FindResource("TileButton")
+        $btn.Width = 260; $btn.Height = 60
         $btn.Tag = $archivo.FullName
         $btn.Add_Click({
             param($sender, $e)
-            $ruta = $sender.Tag
-            Escribir-Log "Ejecutando instalador: $ruta"
-            Start-Process -FilePath $ruta -Verb RunAs
+            Escribir-Log "Ejecutando instalador: $($sender.Tag)"
+            Start-Process -FilePath $sender.Tag -Verb RunAs
         })
-        $panelLocales.Controls.Add($btn)
+        [void]$PanelInstaladores.Children.Add($btn)
     }
 }
 
-$btnAgregar.Add_Click({
-    $dialogo = New-Object System.Windows.Forms.OpenFileDialog
+$BtnAgregarInstalador.Add_Click({
+    $dialogo = New-Object Microsoft.Win32.OpenFileDialog
     $dialogo.Filter = "Instaladores (*.exe;*.msi)|*.exe;*.msi"
     $dialogo.Multiselect = $true
-    if ($dialogo.ShowDialog() -eq "OK") {
+    if ($dialogo.ShowDialog()) {
         foreach ($origen in $dialogo.FileNames) {
             $destino = Join-Path $CarpetaInstaladores (Split-Path $origen -Leaf)
             Copy-Item -Path $origen -Destination $destino -Force
@@ -368,5 +459,5 @@ $btnAgregar.Add_Click({
 Refrescar-Instaladores
 Escribir-Log "Panel iniciado con privilegios de administrador."
 
-# ---------- 8. Mostrar ----------
-[void]$form.ShowDialog()
+# ---------- 10. Mostrar ----------
+[void]$window.ShowDialog()

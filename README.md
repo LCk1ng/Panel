@@ -1,11 +1,15 @@
 # Panel de Administracion - Windows Toolkit
 
-Panel grafico en PowerShell (WinForms) para gestionar tareas comunes de
+Panel grafico en PowerShell (WPF) para gestionar tareas comunes de
 administracion en Windows: instalar apps via `winget`, aplicar tweaks del
 sistema, lanzar herramientas de terceros de confianza, e instalar tus
 propios ejecutables locales.
 
-## Caracteristicas
+## Interfaz
+
+Version 3: interfaz en **WPF** con tema oscuro, botones con animacion al
+pasar el mouse (hover), esquinas redondeadas, y una barra RGB animada en la
+parte superior que cicla de colores continuamente.
 
 - **Auto-elevacion**: se ejecuta automaticamente como Administrador.
 - **Instalar Apps**: catalogo de programas via `winget`, organizado por
