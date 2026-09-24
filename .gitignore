@@ -1,0 +1,8 @@
+# No subir instaladores binarios (pueden pesar mucho y/o tener licencia propia,
+# como los instaladores de Microsoft Office). Cada usuario coloca los suyos
+# localmente en esta carpeta.
+Instaladores/*.exe
+Instaladores/*.msi
+
+# Mantener la carpeta en el repo aunque este vacia
+!Instaladores/.gitkeep
