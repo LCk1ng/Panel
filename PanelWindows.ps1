@@ -2,7 +2,15 @@
 #  PanelWindows.ps1  (v2 - estilo WinUtil por pestanas)
 #  Panel con: Instalar Apps (winget), Tweaks del sistema,
 #  Herramientas remotas curadas, e Instaladores locales.
+#
+#  Se puede ejecutar localmente (doble clic / .\PanelWindows.ps1) o de forma
+#  remota con: irm https://raw.githubusercontent.com/LCk1ng/Panel/main/PanelWindows.ps1 | iex
 # =========================================================
+
+# URL cruda (raw) de este mismo script en GitHub. Se usa solo para poder
+# re-lanzarse a si mismo elevado cuando se ejecuta via "irm ... | iex"
+# (en ese caso no existe un archivo local desde el cual reabrir).
+$ScriptUrl = "https://raw.githubusercontent.com/LCk1ng/Panel/main/PanelWindows.ps1"
 
 # ---------- 1. Auto-elevacion a Administrador ----------
 $esAdmin = ([Security.Principal.WindowsPrincipal] `
@@ -10,8 +18,15 @@ $esAdmin = ([Security.Principal.WindowsPrincipal] `
     ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if (-not $esAdmin) {
-    $args = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
-    Start-Process powershell -Verb RunAs -ArgumentList $args
+    if ($PSCommandPath) {
+        # Ejecucion local desde archivo: reabrir el mismo archivo elevado
+        $args = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+        Start-Process powershell -Verb RunAs -ArgumentList $args
+    } else {
+        # Ejecucion remota via "irm ... | iex": volver a descargar y ejecutar, ya elevado
+        Start-Process powershell -Verb RunAs -ArgumentList `
+            "-NoProfile -Command `"irm '$ScriptUrl' | iex`""
+    }
     exit
 }
 
@@ -19,10 +34,18 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 # ---------- 2. Configuracion ----------
-$CarpetaInstaladores = Join-Path $PSScriptRoot "Instaladores"
-if (-not (Test-Path $CarpetaInstaladores)) {
-    New-Item -ItemType Directory -Path $CarpetaInstaladores | Out-Null
+# Carpeta base: si se ejecuta desde un archivo local, se usa la carpeta del
+# script; si se ejecuta remotamente via iex (no hay archivo local), se usa
+# una carpeta fija en el perfil del usuario.
+$CarpetaBase = if ($PSScriptRoot) { $PSScriptRoot } else { Join-Path $env:USERPROFILE "PanelWindows" }
+if (-not (Test-Path $CarpetaBase)) {
+    New-Item -ItemType Directory -Path $CarpetaBase -Force | Out-Null
 }
+$CarpetaInstaladores = Join-Path $CarpetaBase "Instaladores"
+if (-not (Test-Path $CarpetaInstaladores)) {
+    New-Item -ItemType Directory -Path $CarpetaInstaladores -Force | Out-Null
+}
+
 
 # Herramientas remotas de confianza (curadas por ti). Para sumar una nueva a
 # futuro, revisala primero y agrega una linea aqui.

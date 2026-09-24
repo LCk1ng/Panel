@@ -28,6 +28,18 @@ propios ejecutables locales.
 
 ## Uso
 
+### Opcion A: Ejecucion remota (un solo comando, como WinUtil)
+
+Abre PowerShell **como Administrador** y corre:
+
+```powershell
+irm https://raw.githubusercontent.com/LCk1ng/Panel/main/PanelWindows.ps1 | iex
+```
+
+Esto descarga y abre el panel directamente, sin necesidad de clonar el repo.
+
+### Opcion B: Ejecucion local
+
 1. Clona o descarga este repositorio.
 2. (Opcional) Copia tus propios instaladores `.exe`/`.msi` dentro de la
    carpeta `Instaladores/`.
@@ -43,6 +55,12 @@ propios ejecutables locales.
 
 4. Acepta el aviso de Control de Cuentas de Usuario (UAC); el panel se abre
    con privilegios de administrador.
+
+**Nota sobre la carpeta de instaladores:** al ejecutarse de forma remota (Opcion A),
+como no hay un archivo local, el panel crea y usa la carpeta
+`%USERPROFILE%\PanelWindows\Instaladores` en vez de una carpeta junto al
+script. Al ejecutarse localmente (Opcion B), usa la carpeta `Instaladores/`
+junto al `.ps1`.
 
 ## Agregar tus propias herramientas remotas
 
