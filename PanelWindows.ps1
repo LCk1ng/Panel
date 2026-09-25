@@ -455,9 +455,11 @@ $TemaClaro = @{
 }
 $script:modoOscuro = $true
 
+$brushConverter = New-Object System.Windows.Media.BrushConverter
 function Set-Brush { param($Key, $Hex)
-    $color = [System.Windows.Media.ColorConverter]::ConvertFromString($Hex)
-    $window.Resources[$Key] = New-Object System.Windows.Media.SolidColorBrush $color
+    $brush = $brushConverter.ConvertFromString($Hex)
+    $brush.Freeze()
+    $window.Resources[$Key] = $brush
 }
 
 function Aplicar-Tema {
@@ -473,8 +475,8 @@ function Aplicar-Tema {
     $c1 = [System.Windows.Media.ColorConverter]::ConvertFromString($Tema.WindowBg1)
     $c2 = [System.Windows.Media.ColorConverter]::ConvertFromString($Tema.WindowBg2)
     $gradiente = New-Object System.Windows.Media.LinearGradientBrush
-    $gradiente.StartPoint = New-Object System.Windows.Point(0,0)
-    $gradiente.EndPoint = New-Object System.Windows.Point(1,1)
+    $gradiente.StartPoint = New-Object System.Windows.Point -ArgumentList 0,0
+    $gradiente.EndPoint = New-Object System.Windows.Point -ArgumentList 1,1
     [void]$gradiente.GradientStops.Add((New-Object System.Windows.Media.GradientStop $c1, 0))
     [void]$gradiente.GradientStops.Add((New-Object System.Windows.Media.GradientStop $c2, 1))
     $RootGrid.Background = $gradiente
